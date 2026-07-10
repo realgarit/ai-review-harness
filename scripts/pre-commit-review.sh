@@ -6,6 +6,14 @@ set -m # job control: gives claude -p its own process group, so a
        # timeout can kill it AND any children it spawns, not just the
        # single top-level PID (see the kill -TERM/-KILL calls below).
 
+PROMPT_FILE=""
+# This script must never cause the commit itself to fail, no matter what
+# goes wrong inside (a full /tmp, `git diff` erroring, a kill racing a
+# process exit, anything under `set -e`). This trap is the single source
+# of truth for that guarantee - it runs on every exit path, including an
+# unhandled `set -e` early exit from any command below, and forces 0.
+trap 'rm -f "${PROMPT_FILE:-}"; exit 0' EXIT
+
 if [ -n "${SKIP_REVIEW:-}" ]; then
   echo "SKIP_REVIEW set, skipping AI review."
   exit 0
@@ -17,8 +25,6 @@ if [ -z "$DIFF" ]; then
 fi
 
 CHANGED_FILES=$(git diff --cached --name-only)
-# Customize this per project - these patterns assume a Next.js + Prisma +
-# Stripe stack. Add/remove patterns for your own sensitive-file shapes.
 SENSITIVE_PATTERN='(prisma/schema\.prisma$|prisma/migrations/|(^|/)(auth|session|stripe)(/|[^/]*\.(ts|tsx|js)$)|middleware\.ts$|/api/.*webhook|/webhook|/api/.*\[[^/]+\])'
 DIFF_LINES=$(echo "$DIFF" | wc -l | tr -d ' ')
 SIZE_THRESHOLD=400
@@ -44,7 +50,6 @@ $DIFF"
 
 REVIEW_TIMEOUT_SECS="${REVIEW_TIMEOUT_SECS:-120}"
 PROMPT_FILE=$(mktemp)
-trap 'rm -f "$PROMPT_FILE"' EXIT
 printf '%s' "$PROMPT" > "$PROMPT_FILE"
 
 claude -p --output-format text < "$PROMPT_FILE" &
@@ -62,17 +67,18 @@ if kill -0 "$CLAUDE_PID" 2>/dev/null; then
   # Negative PID = signal the whole process group `set -m` gave this
   # background job, not just the top-level PID - catches any child
   # processes claude -p spawned too.
-  kill -TERM -"$CLAUDE_PID" 2>/dev/null
+  kill -TERM -"$CLAUDE_PID" 2>/dev/null || true
   echo "(claude -p timed out after ${REVIEW_TIMEOUT_SECS}s, killed - commit proceeds regardless)"
-  # Give it a brief grace period to exit on SIGTERM, then force it - a
-  # process that ignores or is slow to handle SIGTERM would otherwise
-  # make the unconditional `wait` below block indefinitely, defeating
-  # the whole point of the timeout (the commit must never hang).
+  # Give it a brief grace period to exit on SIGTERM, then force-kill the
+  # group unconditionally - not gated on the leader PID still being
+  # alive, since the leader can exit/get reaped while a grandchild it
+  # spawned keeps running and ignores SIGTERM. Killing an already-dead
+  # group is harmless (just returns nonzero, which is ignored).
   for _ in 1 2 3 4 5; do
     kill -0 "$CLAUDE_PID" 2>/dev/null || break
     sleep 0.2
   done
-  kill -0 "$CLAUDE_PID" 2>/dev/null && kill -KILL -"$CLAUDE_PID" 2>/dev/null
+  kill -KILL -"$CLAUDE_PID" 2>/dev/null || true
 fi
 kill "$SLEEP_PID" 2>/dev/null || true
 wait "$CLAUDE_PID" 2>/dev/null || true
