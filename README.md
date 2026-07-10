@@ -39,7 +39,12 @@ scripts/test-mark-security-reviewed.sh
 
 ## Status
 
-Private, personal-use tooling. The GitHub Actions path (`.github/workflows/`)
-is used in production; the Gitea Actions path (`.gitea/workflows/`) is
-unverified against a real Gitea instance and may need adjustment - see
-the comment at the top of that file.
+Personal-use tooling, made public (MIT-licensed) in case the Layer 2
+pattern (a Claude Code hook that blocks edits until a security-reviewer
+subagent has run) is useful to someone else. The GitHub Actions path
+(`.github/workflows/`) is used in production; the Gitea Actions path
+(`.gitea/workflows/`) is unverified against a real Gitea instance and
+may need adjustment - see the comment at the top of that file.
+
+Contributions/issues welcome, but this is maintained on a "when I have
+time" basis, not a supported product.
