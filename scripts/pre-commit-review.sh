@@ -78,6 +78,14 @@ if kill -0 "$CLAUDE_PID" 2>/dev/null; then
     kill -0 "$CLAUDE_PID" 2>/dev/null || break
     sleep 0.2
   done
+  # Theoretically the OS could recycle $CLAUDE_PID for an unrelated new
+  # process-group leader in the moment between the last check above and
+  # this line, making this SIGKILL hit the wrong process. Accepted risk
+  # for a short-lived, single-invocation local hook (not a long-running
+  # process manager) - PID reuse within a sub-second window is
+  # vanishingly unlikely, and a conditional check here would reintroduce
+  # the bug this unconditional call fixed (a grandchild outliving a
+  # reaped leader).
   kill -KILL -"$CLAUDE_PID" 2>/dev/null || true
 fi
 kill "$SLEEP_PID" 2>/dev/null || true
