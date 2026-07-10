@@ -5,6 +5,11 @@ set -euo pipefail
 set -m # job control: gives claude -p its own process group, so a
        # timeout can kill it AND any children it spawns, not just the
        # single top-level PID (see the kill -TERM/-KILL calls below).
+       # Monitor mode can print "[1]+ Terminated" job-status noise to
+       # stderr in an interactive shell, but that notification is tied
+       # to the interactive prompt-display loop - verified empirically
+       # in this non-interactive script context (bash script.sh, no
+       # prompt loop) that killing the backgrounded job produces none.
 
 PROMPT_FILE=""
 # This script must never cause the commit itself to fail, no matter what
