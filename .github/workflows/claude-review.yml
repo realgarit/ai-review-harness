@@ -1,0 +1,52 @@
+# Copy this file (and scripts/, prompts/) into a repo's own
+# .github/workflows/ to wire in Layer 1 (CI review) of the harness. See
+# ../../docs/setup-new-repo.md for the full checklist, including the one
+# repo secret this needs (CLAUDE_CODE_OAUTH_TOKEN).
+name: claude-review
+
+on:
+  pull_request:
+
+jobs:
+  review:
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Compute PR diff
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: bash scripts/compute-diff.sh
+
+      - name: Run Semgrep
+        run: bash scripts/run-semgrep.sh
+
+      - name: Install Claude Code CLI
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Run AI review
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: bash scripts/run-ai-review.sh
+
+      - name: Format combined comment
+        run: python3 scripts/format-review-comment.py semgrep.json ai-review.txt > comment.md
+
+      - name: Post PR comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh pr comment "${{ github.event.pull_request.number }}" --body-file comment.md
+
+      - name: Fail check if findings exist
+        run: |
+          if grep -qv "No Semgrep findings.\|No findings.\|^$\|^## \|^### " comment.md; then
+            echo "Findings reported - see PR comment. This check does not block merge by default (no branch protection on a free-plan personal repo); treat it as a strong signal to look before merging."
+            exit 1
+          fi

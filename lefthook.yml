@@ -1,0 +1,4 @@
+pre-commit:
+  commands:
+    ai-review:
+      run: bash scripts/pre-commit-review.sh

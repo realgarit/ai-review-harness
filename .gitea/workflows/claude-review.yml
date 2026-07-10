@@ -1,0 +1,65 @@
+# Gitea Actions equivalent of ../../.github/workflows/claude-review.yml.
+# Gitea Actions is YAML-compatible with GitHub Actions for basic steps and
+# most github.com marketplace actions, but the PR-comment step below uses
+# Gitea's own API instead of the gh CLI (Gitea doesn't have an equivalent
+# CLI action installed by default) - this file is UNVERIFIED against a
+# real Gitea instance (built without access to one). Adjust runs-on to
+# match your actual runner label, and sanity-check the API call against
+# your Gitea version's docs before trusting the fail-check.
+name: claude-review
+
+on:
+  pull_request:
+
+jobs:
+  review:
+    runs-on: ubuntu-latest # change to your Gitea runner's label
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Compute PR diff
+        env:
+          BASE_REF: ${{ gitea.base_ref }}
+        run: bash scripts/compute-diff.sh
+
+      - name: Run Semgrep
+        run: bash scripts/run-semgrep.sh
+
+      - name: Install Claude Code CLI
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Run AI review
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: bash scripts/run-ai-review.sh
+
+      - name: Format combined comment
+        run: python3 scripts/format-review-comment.py semgrep.json ai-review.txt > comment.md
+
+      # Gitea's issue-comment API treats PRs as issues, same as GitHub's
+      # does - POST /repos/{owner}/{repo}/issues/{index}/comments. Needs a
+      # GITEA_TOKEN secret (a personal access token with issue:write scope)
+      # since gitea.token isn't a thing the way github.token is.
+      - name: Post PR comment
+        env:
+          GITEA_TOKEN: ${{ secrets.GITEA_TOKEN }}
+          GITEA_SERVER: ${{ gitea.server_url }}
+          REPO: ${{ gitea.repository }}
+          PR_NUMBER: ${{ gitea.event.pull_request.number }}
+        run: |
+          body=$(python3 -c "import json,sys; print(json.dumps({'body': open('comment.md').read()}))")
+          curl -sf -X POST \
+            -H "Authorization: token $GITEA_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "$body" \
+            "$GITEA_SERVER/api/v1/repos/$REPO/issues/$PR_NUMBER/comments"
+
+      - name: Fail check if findings exist
+        run: |
+          if grep -qv "No Semgrep findings.\|No findings.\|^$\|^## \|^### " comment.md; then
+            echo "Findings reported - see PR comment."
+            exit 1
+          fi
