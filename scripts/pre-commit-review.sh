@@ -2,6 +2,9 @@
 # scripts/pre-commit-review.sh
 # Advisory AI review of the staged diff. Never blocks the commit.
 set -euo pipefail
+set -m # job control: gives claude -p its own process group, so a
+       # timeout can kill it AND any children it spawns, not just the
+       # single top-level PID (see the kill -TERM/-KILL calls below).
 
 if [ -n "${SKIP_REVIEW:-}" ]; then
   echo "SKIP_REVIEW set, skipping AI review."
@@ -56,8 +59,20 @@ while kill -0 "$CLAUDE_PID" 2>/dev/null && kill -0 "$SLEEP_PID" 2>/dev/null; do
 done
 
 if kill -0 "$CLAUDE_PID" 2>/dev/null; then
-  kill -TERM "$CLAUDE_PID" 2>/dev/null
+  # Negative PID = signal the whole process group `set -m` gave this
+  # background job, not just the top-level PID - catches any child
+  # processes claude -p spawned too.
+  kill -TERM -"$CLAUDE_PID" 2>/dev/null
   echo "(claude -p timed out after ${REVIEW_TIMEOUT_SECS}s, killed - commit proceeds regardless)"
+  # Give it a brief grace period to exit on SIGTERM, then force it - a
+  # process that ignores or is slow to handle SIGTERM would otherwise
+  # make the unconditional `wait` below block indefinitely, defeating
+  # the whole point of the timeout (the commit must never hang).
+  for _ in 1 2 3 4 5; do
+    kill -0 "$CLAUDE_PID" 2>/dev/null || break
+    sleep 0.2
+  done
+  kill -0 "$CLAUDE_PID" 2>/dev/null && kill -KILL -"$CLAUDE_PID" 2>/dev/null
 fi
 kill "$SLEEP_PID" 2>/dev/null || true
 wait "$CLAUDE_PID" 2>/dev/null || true
