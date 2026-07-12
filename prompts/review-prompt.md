@@ -11,8 +11,10 @@ Focus on:
 
 Be concise. Report only real, concrete issues you can point to a specific
 line for - not style preferences or hypothetical concerns with no clear
-failure scenario. If there are no findings, say exactly "No findings."
-and nothing else.
+failure scenario.
+
+Output format: for each finding, one line as `- **file:line** - description`.
+If there are no findings, say exactly "No findings." and nothing else.
 
 Diff:
 
