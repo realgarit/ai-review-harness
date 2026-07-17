@@ -22,6 +22,10 @@ AI_MODEL="${AI_MODEL:-claude}"
 invoke_claude() {
   # Requires CLAUDE_CODE_OAUTH_TOKEN in the environment and `claude`
   # installed globally via npm.
+  if [ -z "${CLAUDE_CODE_OAUTH_TOKEN:-}" ]; then
+    echo "CLAUDE_CODE_OAUTH_TOKEN is not set. Set it as a repo secret (Settings > Secrets and variables > Actions) so the AI review can use Claude Code." >&2
+    return 1
+  fi
   claude -p --output-format text
 }
 
