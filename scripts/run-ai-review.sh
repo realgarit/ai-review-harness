@@ -1,13 +1,17 @@
 #!/usr/bin/env bash
 # scripts/run-ai-review.sh
 # Renders prompts/review-prompt.md against pr.diff and runs it through the
-# model CLI, writing ai-review.txt. Requires pr.diff (see compute-diff.sh)
-# and CLAUDE_CODE_OAUTH_TOKEN in the environment.
+# AI model, writing ai-review.txt. Requires pr.diff (see compute-diff.sh).
 #
-# This is the one place a different model/CLI gets swapped in later - the
-# rest of the harness (diff computation, Semgrep, comment formatting,
-# posting) doesn't know or care which model produced ai-review.txt.
+# Set AI_MODEL to choose the provider (default: claude). Each provider
+# needs its own auth env var — see scripts/invoke-model.sh for the full
+# list. This script is model-agnostic; invoke-model.sh handles dispatch.
 set -euo pipefail
+
+# Source repo-level config if it exists (allows overriding AI_MODEL and
+# model-specific settings without touching the scripts).
+CONFIG_FILE="$(dirname "$0")/../.ai-review.conf"
+[ -f "$CONFIG_FILE" ] && . "$CONFIG_FILE"
 
 PROMPT_TEMPLATE="$(dirname "$0")/../prompts/review-prompt.md"
 python3 - "$PROMPT_TEMPLATE" << 'PYEOF'
@@ -17,14 +21,16 @@ template = open(sys.argv[1]).read()
 open("prompt.txt", "w").write(template.replace("{{DIFF}}", diff))
 PYEOF
 
+MODEL_DISPATCHER="$(dirname "$0")/invoke-model.sh"
+
 set +e
-claude -p --output-format text < prompt.txt > ai-review.txt 2> ai-review-stderr.txt
-CLAUDE_EXIT=$?
+"$MODEL_DISPATCHER" < prompt.txt > ai-review.txt 2> ai-review-stderr.txt
+MODEL_EXIT=$?
 set -e
 
-echo "claude -p exited with code $CLAUDE_EXIT"
+echo "invoke-model ($AI_MODEL) exited with code $MODEL_EXIT"
 if [ -s ai-review-stderr.txt ]; then
-  echo "--- claude stderr ---"
+  echo "--- model stderr ---"
   cat ai-review-stderr.txt
 fi
-test -s ai-review.txt || echo "AI review step failed to produce output (exit $CLAUDE_EXIT). See job log for stderr." > ai-review.txt
+test -s ai-review.txt || echo "AI review step failed to produce output (exit $MODEL_EXIT). See job log for stderr." > ai-review.txt

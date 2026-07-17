@@ -1,4 +1,4 @@
-# Gitea Actions equivalent of ../../.github/workflows/claude-review.yml.
+# Gitea Actions equivalent of ../../.github/workflows/ai-review.yml.
 # Gitea Actions is YAML-compatible with GitHub Actions for basic steps and
 # most github.com marketplace actions, but the PR-comment step below uses
 # Gitea's own API instead of the gh CLI (Gitea doesn't have an equivalent
@@ -6,7 +6,10 @@
 # real Gitea instance (built without access to one). Adjust runs-on to
 # match your actual runner label, and sanity-check the API call against
 # your Gitea version's docs before trusting the fail-check.
-name: claude-review
+#
+# Choose your AI model by setting AI_MODEL (default: claude). Each provider
+# needs its own secrets — see scripts/invoke-model.sh for the full list.
+name: ai-review
 
 on:
   pull_request:
@@ -28,12 +31,26 @@ jobs:
       - name: Run Semgrep
         run: bash scripts/run-semgrep.sh
 
-      - name: Install Claude Code CLI
-        run: npm install -g @anthropic-ai/claude-code
+      - name: Install model CLI (if needed)
+        env:
+          AI_MODEL: claude
+        run: |
+          case "${AI_MODEL}" in
+            claude) npm install -g @anthropic-ai/claude-code ;;
+            codex)  npm install -g @openai/codex ;;
+            *)      echo "AI_MODEL=${AI_MODEL} uses API (curl+jq), no CLI install needed" ;;
+          esac
 
       - name: Run AI review
         env:
+          AI_MODEL: claude
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          CODEX_API_KEY: ${{ secrets.CODEX_API_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          MOONSHOT_API_KEY: ${{ secrets.MOONSHOT_API_KEY }}
+          OPENAI_COMPAT_BASE_URL: ${{ secrets.OPENAI_COMPAT_BASE_URL }}
+          OPENAI_COMPAT_API_KEY: ${{ secrets.OPENAI_COMPAT_API_KEY }}
         run: bash scripts/run-ai-review.sh
 
       - name: Format combined comment

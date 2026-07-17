@@ -34,3 +34,5 @@ computation, Semgrep, comment formatting, posting) is model-agnostic.
 ## Working notes
 
 <!-- Any agent: append short dated notes here (YYYY-MM-DD — note). Prune notes when stale or once folded into the sections above. -->
+
+- 2026-07-17 — Multi-model support: `scripts/invoke-model.sh` is now the single dispatch point for all AI models (claude, openai, codex, deepseek, moonshot, openai-compat). `run-ai-review.sh` and `pre-commit-review.sh` both delegate to it. CI workflows renamed from `claude-review.yml` to `ai-review.yml`. Repos configure their model via `AI_MODEL` env var or `.ai-review.conf`. Backward compatible: defaults to claude when AI_MODEL is unset.
