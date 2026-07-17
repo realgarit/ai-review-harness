@@ -7,17 +7,33 @@ This checklist is everything else, done once per repo.
 ## Layer 1: CI review
 
 1. Copy into the new repo:
-   - `.github/workflows/claude-review.yml` (GitHub) or
-     `.gitea/workflows/claude-review.yml` (Gitea)
+   - `.github/workflows/ai-review.yml` (GitHub) or
+     `.gitea/workflows/ai-review.yml` (Gitea)
    - `scripts/compute-diff.sh`
    - `scripts/run-semgrep.sh`
    - `scripts/run-ai-review.sh`
+   - `scripts/invoke-model.sh`
    - `scripts/format-review-comment.py`
    - `prompts/review-prompt.md`
-2. Add a `CLAUDE_CODE_OAUTH_TOKEN` secret to the repo (Settings > Secrets
-   and variables > Actions, or Gitea's equivalent). Generate the token
-   with `claude setup-token` on a machine with a Claude subscription -
-   this uses your subscription, not pay-per-token API billing.
+2. Choose your AI model. The harness supports multiple providers — add
+   the corresponding secrets to the repo (Settings > Secrets and
+   variables > Actions, or Gitea's equivalent):
+
+   | `AI_MODEL`     | Secrets needed                                        | Notes                                    |
+   | -------------- | ----------------------------------------------------- | ---------------------------------------- |
+   | `claude`       | `CLAUDE_CODE_OAUTH_TOKEN`                             | Default. Generate with `claude setup-token`. |
+   | `openai`       | `OPENAI_API_KEY`                                      | Plus optional `OPENAI_MODEL` repo variable. |
+   | `codex`        | `CODEX_API_KEY`                                       | OpenAI Codex CLI (subscription or API key). |
+   | `deepseek`     | `DEEPSEEK_API_KEY`                                    | Plus optional `DEEPSEEK_MODEL` variable.  |
+   | `moonshot`     | `MOONSHOT_API_KEY`                                    | Plus optional `MOONSHOT_MODEL` variable.  |
+   | `openai-compat`| `OPENAI_COMPAT_BASE_URL`, `OPENAI_COMPAT_API_KEY`     | Generic endpoint. Optional `OPENAI_COMPAT_MODEL`. |
+
+   Set `AI_MODEL` as a repo variable (GitHub Actions) or in the workflow
+   YAML to switch providers. For GitHub Actions, use:
+   - `vars.AI_MODEL` to set the model name
+   - optional `vars.OPENAI_MODEL`, `vars.DEEPSEEK_MODEL`, etc. to
+     override the specific model within a provider family
+
 3. On GitHub, the workflow's `docker run semgrep/semgrep` step needs
    Docker on the runner - `ubuntu-latest` GitHub-hosted runners have it
    by default. On Gitea, confirm your runner has Docker before relying
