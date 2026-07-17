@@ -14,10 +14,23 @@ things at different points instead of relying on one gate:
    review of the staged diff before every commit. Advisory only, never
    blocks - a fast, cheap early signal.
 
-Nothing here is tied to a specific model - `scripts/run-ai-review.sh` is
-the one place that invokes a model CLI (`claude -p` today); everything
-else (diff computation, Semgrep, comment formatting, posting) doesn't
-know or care which model produced the review text.
+Nothing here is tied to a specific model — `scripts/run-ai-review.sh` and
+`scripts/pre-commit-review.sh` are model-agnostic. Both delegate to
+`scripts/invoke-model.sh`, the single dispatch point that supports
+multiple AI providers based on the `AI_MODEL` environment variable:
+
+| Provider | Auth method | Transport |
+|---|---|---|
+| `claude` (default) | Claude Code CLI (subscription) | `claude -p` |
+| `openai` | OpenAI API key | `curl` + `jq` (Chat API) |
+| `codex` | OpenAI Codex CLI (subscription) | `codex exec` |
+| `deepseek` | DeepSeek API key | `curl` + `jq` |
+| `moonshot` | Moonshot API key | `curl` + `jq` |
+| `openai-compat` | API key + base URL | `curl` + `jq` (Ollama, vLLM, Azure, etc.) |
+
+Set `AI_MODEL` in CI workflow variables or `.ai-review.conf` to choose.
+See [docs/setup-new-repo.md](docs/setup-new-repo.md) for per-provider
+secret requirements.
 
 ## Quickstart
 
