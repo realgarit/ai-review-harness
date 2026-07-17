@@ -8,7 +8,8 @@ or Gitea Actions), a local Claude Code `PreToolUse` hook that blocks
 edits to security-sensitive files until a security-reviewer subagent has
 run that session, and an advisory `lefthook` pre-commit hook that runs an
 AI review of the staged diff. `scripts/run-ai-review.sh` is the one place
-that invokes a model CLI (`claude -p` today); everything else (diff
+that invokes a model CLI (`claude -p` for Claude, or API calls for others);
+everything else (diff
 computation, Semgrep, comment formatting, posting) is model-agnostic.
 
 - Language/stack: shell scripts (`scripts/`, `hooks/`) and Python
@@ -18,8 +19,8 @@ computation, Semgrep, comment formatting, posting) is model-agnostic.
   per-repo CI/pre-commit setup documented in `docs/setup-new-repo.md`.
 - Tests: `scripts/test-security-review-gate.sh` and
   `scripts/test-mark-security-reviewed.sh`.
-- CI workflows: `.github/workflows/claude-review.yml` (production) and
-  `.gitea/workflows/claude-review.yml` (unverified against a real Gitea
+- CI workflows: `.github/workflows/ai-review.yml` (production) and
+  `.gitea/workflows/ai-review.yml` (unverified against a real Gitea
   instance).
 - Status: personal-use tooling, MIT-licensed, maintained on a
   when-I-have-time basis.
@@ -34,5 +35,3 @@ computation, Semgrep, comment formatting, posting) is model-agnostic.
 ## Working notes
 
 <!-- Any agent: append short dated notes here (YYYY-MM-DD — note). Prune notes when stale or once folded into the sections above. -->
-
-- 2026-07-17 — Multi-model support: `scripts/invoke-model.sh` is now the single dispatch point for all AI models (claude, openai, codex, deepseek, moonshot, openai-compat). `run-ai-review.sh` and `pre-commit-review.sh` both delegate to it. CI workflows renamed from `claude-review.yml` to `ai-review.yml`. Repos configure their model via `AI_MODEL` env var or `.ai-review.conf`. Backward compatible: defaults to claude when AI_MODEL is unset.
