@@ -7,7 +7,7 @@
 # match your actual runner label, and sanity-check the API call against
 # your Gitea version's docs before trusting the fail-check.
 #
-# Choose your AI model by setting AI_MODEL (default: claude). Each provider
+# Choose your AI model by setting AI_MODEL (default: codex/ChatGPT). Each provider
 # needs its own secrets — see scripts/invoke-model.sh for the full list.
 name: ai-review
 
@@ -17,6 +17,8 @@ on:
 jobs:
   review:
     runs-on: ubuntu-latest # change to your Gitea runner's label
+    env:
+      AI_MODEL: ${{ vars.AI_MODEL || 'codex' }}
     steps:
       - name: Checkout
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
@@ -32,8 +34,6 @@ jobs:
         run: bash scripts/run-semgrep.sh
 
       - name: Install model CLI (if needed)
-        env:
-          AI_MODEL: claude
         run: |
           case "${AI_MODEL}" in
             claude) npm install -g @anthropic-ai/claude-code ;;
@@ -42,8 +42,9 @@ jobs:
           esac
 
       - name: Run AI review
+        # Keep provider credentials scoped to this step; never promote them
+        # to the job environment.
         env:
-          AI_MODEL: claude
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           CODEX_API_KEY: ${{ secrets.CODEX_API_KEY }}
@@ -51,6 +52,10 @@ jobs:
           MOONSHOT_API_KEY: ${{ secrets.MOONSHOT_API_KEY }}
           OPENAI_COMPAT_BASE_URL: ${{ secrets.OPENAI_COMPAT_BASE_URL }}
           OPENAI_COMPAT_API_KEY: ${{ secrets.OPENAI_COMPAT_API_KEY }}
+          OPENAI_COMPAT_MODEL: ${{ vars.OPENAI_COMPAT_MODEL }}
+          OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
+          DEEPSEEK_MODEL: ${{ vars.DEEPSEEK_MODEL }}
+          MOONSHOT_MODEL: ${{ vars.MOONSHOT_MODEL }}
         run: bash scripts/run-ai-review.sh
 
       - name: Format combined comment

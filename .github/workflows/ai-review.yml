@@ -3,7 +3,7 @@
 # ../../docs/setup-new-repo.md for the full checklist, including the
 # secrets each provider needs.
 #
-# Choose your AI model by setting AI_MODEL (default: claude). Each provider
+# Choose your AI model by setting AI_MODEL (default: codex/ChatGPT). Each provider
 # needs its own secrets — see scripts/invoke-model.sh for the full list.
 name: ai-review
 
@@ -15,7 +15,7 @@ jobs:
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     env:
-      AI_MODEL: ${{ vars.AI_MODEL || 'claude' }}
+      AI_MODEL: ${{ vars.AI_MODEL || 'codex' }}
     permissions:
       contents: read
       pull-requests: write
@@ -42,6 +42,8 @@ jobs:
           esac
 
       - name: Run AI review
+        # Keep provider credentials scoped to this step; never move them to
+        # jobs.review.env where every checked-out step could inherit them.
         env:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}

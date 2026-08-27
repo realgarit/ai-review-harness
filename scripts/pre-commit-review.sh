@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # scripts/pre-commit-review.sh
 # Advisory AI review of the staged diff. Never blocks the commit.
-# Reads AI_MODEL from env (default: claude); delegates to
+# Reads AI_MODEL from env (default: codex/ChatGPT); delegates to
 # scripts/invoke-model.sh for provider dispatch.
 set -euo pipefail
 
@@ -50,7 +50,7 @@ if [ "$IS_SENSITIVE" = false ] && [ "$DIFF_LINES" -lt "$SIZE_THRESHOLD" ]; then
   exit 0
 fi
 
-MODEL_PROVIDER="${AI_MODEL:-claude}"
+MODEL_PROVIDER="${AI_MODEL:-codex}"
 # Quick pre-flight: skip if the chosen provider's CLI isn't installed.
 # For API-based providers (openai, deepseek, moonshot, openai-compat), we
 # rely on curl+jq being available and API keys being set — the dispatcher
