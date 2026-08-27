@@ -7,6 +7,12 @@
 # match your actual runner label, and sanity-check the API call against
 # your Gitea version's docs before trusting the fail-check.
 #
+# SECURITY: Unlike the GitHub workflow, this unverified Gitea template has no
+# bundled Codex proxy action. The direct Codex path below must therefore only be
+# used on a trusted, single-tenant runner for trusted pull requests. Do not add
+# CODEX_API_KEY to a public/untrusted Gitea pull-request workflow until an
+# equivalent isolated proxy is configured for that installation.
+#
 # Choose your AI model by setting AI_MODEL (default: codex/ChatGPT). Each provider
 # needs its own secrets — see scripts/invoke-model.sh for the full list.
 name: ai-review
@@ -24,6 +30,7 @@ jobs:
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Compute PR diff
         env:
@@ -34,14 +41,21 @@ jobs:
         run: bash scripts/run-semgrep.sh
 
       - name: Install model CLI (if needed)
+        env:
+          # Keep CLI installation aligned with a repo-level provider override.
+          AI_MODEL: ${{ vars.AI_MODEL || 'codex' }}
         run: |
+          if [ -f .ai-review.conf ]; then
+            . .ai-review.conf
+          fi
+          AI_MODEL="${AI_MODEL:-codex}"
           case "${AI_MODEL}" in
             claude) npm install -g @anthropic-ai/claude-code ;;
-            codex)  npm install -g @openai/codex ;;
+            codex)  npm install -g "@openai/codex@0.150.0-alpha.8" ;;
             *)      echo "AI_MODEL=${AI_MODEL} uses API (curl+jq), no CLI install needed" ;;
           esac
 
-      - name: Run AI review
+      - name: Run AI review (trusted runner only)
         # Keep provider credentials scoped to this step; never promote them
         # to the job environment.
         env:

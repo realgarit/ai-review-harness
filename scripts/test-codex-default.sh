@@ -41,6 +41,17 @@ check_contains() {
   fi
 }
 
+check_not_contains() {
+  local desc="$1" needle="$2" file="$3"
+  if grep -Fq "$needle" "$file"; then
+    echo "FAIL: $desc (unexpected [$needle] in $file)"
+    fail=$((fail + 1))
+  else
+    echo "PASS: $desc"
+    pass=$((pass + 1))
+  fi
+}
+
 run_codex() {
   local prompt="$1"
   : > "$CODEX_TEST_ARGS_FILE"
@@ -77,18 +88,66 @@ check_equal "run-ai-review uses the default Codex provider" "0" "$review_status"
 check_contains "run-ai-review sends the rendered diff to Codex" \
   'test diff' "$TMP/ai-review.txt"
 
+# A config-only provider selection must reach the child dispatcher. This
+# mirrors a real repo-level .ai-review.conf without contacting a provider.
+CONFIG_HARNESS="$TMP/config-harness"
+mkdir -p "$CONFIG_HARNESS/scripts" "$CONFIG_HARNESS/prompts"
+cp "$ROOT/scripts/run-ai-review.sh" "$CONFIG_HARNESS/scripts/run-ai-review.sh"
+cp "$ROOT/prompts/review-prompt.md" "$CONFIG_HARNESS/prompts/review-prompt.md"
+printf '%s\n' 'AI_MODEL=claude' 'OPENAI_MODEL=configured-model' > "$CONFIG_HARNESS/.ai-review.conf"
+printf '%s\n' \
+  '#!/usr/bin/env bash' \
+  'set -euo pipefail' \
+  'printf "%s|%s\n" "${AI_MODEL-unset}" "${OPENAI_MODEL-unset}" > "${CONFIG_TEST_ENV_FILE:?CONFIG_TEST_ENV_FILE is required}"' \
+  'cat' > "$CONFIG_HARNESS/scripts/invoke-model.sh"
+chmod +x "$CONFIG_HARNESS/scripts/invoke-model.sh"
+export CONFIG_TEST_ENV_FILE="$TMP/config-env"
+pushd "$CONFIG_HARNESS" > /dev/null
+printf '%s\n' 'config diff' > pr.diff
+set +e
+bash scripts/run-ai-review.sh > run-stdout 2> run-stderr
+config_status=$?
+set -e
+popd > /dev/null
+check_equal "config-selected provider review succeeds" "0" "$config_status"
+check_equal "config-selected provider reaches dispatcher" \
+  "claude|configured-model" "$(cat "$CONFIG_TEST_ENV_FILE")"
+check_contains "config-selected provider receives the rendered diff" \
+  'config diff' "$CONFIG_HARNESS/ai-review.txt"
+
 check_contains "dispatcher documents Codex as the default" \
   'AI_MODEL="${AI_MODEL:-codex}"' "$ROOT/scripts/invoke-model.sh"
 check_contains "run-ai-review initializes the Codex default" \
   'AI_MODEL="${AI_MODEL:-codex}"' "$ROOT/scripts/run-ai-review.sh"
 check_contains "pre-commit initializes the Codex default" \
-  'MODEL_PROVIDER="${AI_MODEL:-codex}"' "$ROOT/scripts/pre-commit-review.sh"
+  'MODEL_PROVIDER="$AI_MODEL"' "$ROOT/scripts/pre-commit-review.sh"
 check_contains "GitHub workflow defaults to Codex" \
   "vars.AI_MODEL || 'codex'" "$ROOT/.github/workflows/ai-review.yml"
+check_contains "GitHub resolves repo provider configuration" \
+  'id: resolve_model' "$ROOT/.github/workflows/ai-review.yml"
+check_contains "GitHub Codex path follows the resolved provider" \
+  "steps.resolve_model.outputs.model == 'codex'" "$ROOT/.github/workflows/ai-review.yml"
 check_contains "Gitea workflow defaults to Codex" \
   "vars.AI_MODEL || 'codex'" "$ROOT/.gitea/workflows/ai-review.yml"
 check_contains "repo config documents Codex as the default" \
   '# AI_MODEL=codex' "$ROOT/.ai-review.conf"
+check_contains "run-ai-review exports provider configuration" \
+  'export AI_MODEL OPENAI_MODEL' "$ROOT/scripts/run-ai-review.sh"
+check_contains "pre-commit exports provider configuration" \
+  'export AI_MODEL OPENAI_MODEL' "$ROOT/scripts/pre-commit-review.sh"
+check_contains "GitHub uses the pinned Codex Action" \
+  'openai/codex-action@f367b1e9572fd064ea71ef925ca24ee0f01080af' \
+  "$ROOT/.github/workflows/ai-review.yml"
+check_contains "GitHub uses Codex read-only permissions" \
+  'permission-profile: ":read-only"' "$ROOT/.github/workflows/ai-review.yml"
+check_contains "GitHub disables checkout credential persistence" \
+  'persist-credentials: false' "$ROOT/.github/workflows/ai-review.yml"
+check_contains "GitHub pins the Codex CLI version" \
+  'codex-version: "0.150.0-alpha.8"' "$ROOT/.github/workflows/ai-review.yml"
+check_contains "GitHub uses ephemeral Codex sessions" \
+  '"--ephemeral"' "$ROOT/.github/workflows/ai-review.yml"
+check_not_contains "GitHub does not expose CODEX_API_KEY to checkout scripts" \
+  'CODEX_API_KEY: ${{' "$ROOT/.github/workflows/ai-review.yml"
 
 echo "$pass passed, $fail failed"
 [ "$fail" -eq 0 ]

@@ -8,6 +8,11 @@ set -euo pipefail
 # Source repo-level config if it exists.
 CONFIG_FILE="$(dirname "$0")/../.ai-review.conf"
 [ -f "$CONFIG_FILE" ] && . "$CONFIG_FILE"
+# Keep values loaded from .ai-review.conf visible to invoke-model.sh. Bash
+# variables created by sourcing a file are otherwise shell-local.
+AI_MODEL="${AI_MODEL:-codex}"
+export AI_MODEL OPENAI_MODEL DEEPSEEK_MODEL MOONSHOT_MODEL \
+  OPENAI_COMPAT_BASE_URL OPENAI_COMPAT_MODEL
 
 set -m # job control: gives process group isolation for timeout kills.
        # timeout can kill it AND any children it spawns, not just the
@@ -50,7 +55,7 @@ if [ "$IS_SENSITIVE" = false ] && [ "$DIFF_LINES" -lt "$SIZE_THRESHOLD" ]; then
   exit 0
 fi
 
-MODEL_PROVIDER="${AI_MODEL:-codex}"
+MODEL_PROVIDER="$AI_MODEL"
 # Quick pre-flight: skip if the chosen provider's CLI isn't installed.
 # For API-based providers (openai, deepseek, moonshot, openai-compat), we
 # rely on curl+jq being available and API keys being set — the dispatcher

@@ -38,6 +38,12 @@ model-agnostic.
 <!-- Any agent: append short dated notes here (YYYY-MM-DD — note). Prune notes when stale or once folded into the sections above. -->
 
 - 2026-08-27 — The default AI review provider is Codex/ChatGPT. Local CLI
-  use authenticates with `codex login`; CI uses a step-scoped
-  `CODEX_API_KEY`. The dispatcher invokes
+  use authenticates with `codex login`; GitHub CI uses the pinned Codex Action
+  with an OpenAI API-key proxy, while trusted Gitea CI may use the direct
+  dispatcher. Local fallback invocation is
   `codex exec --ephemeral --sandbox read-only -` for review-only stdin.
+- 2026-08-27 — GitHub CI now routes the default provider through the pinned
+  `openai/codex-action` with `:read-only` permissions and an API-key proxy;
+  only alternate providers use the checked-out dispatcher with step-scoped
+  credentials. Gitea remains direct CLI and trusted-runner-only until an
+  equivalent proxy is configured.

@@ -13,6 +13,11 @@ set -euo pipefail
 CONFIG_FILE="$(dirname "$0")/../.ai-review.conf"
 [ -f "$CONFIG_FILE" ] && . "$CONFIG_FILE"
 AI_MODEL="${AI_MODEL:-codex}"
+# A value assigned by a sourced config file is not exported automatically.
+# Export the dispatcher inputs explicitly so repo-level provider/model choices
+# reach invoke-model.sh even when they were not already in the environment.
+export AI_MODEL OPENAI_MODEL DEEPSEEK_MODEL MOONSHOT_MODEL \
+  OPENAI_COMPAT_BASE_URL OPENAI_COMPAT_MODEL
 
 PROMPT_TEMPLATE="$(dirname "$0")/../prompts/review-prompt.md"
 python3 - "$PROMPT_TEMPLATE" << 'PYEOF'
@@ -21,6 +26,11 @@ diff = open("pr.diff").read()
 template = open(sys.argv[1]).read()
 open("prompt.txt", "w").write(template.replace("{{DIFF}}", diff))
 PYEOF
+
+if [ "${RENDER_ONLY:-}" = "1" ]; then
+  echo "Rendered prompt.txt; model invocation skipped."
+  exit 0
+fi
 
 MODEL_DISPATCHER="$(dirname "$0")/invoke-model.sh"
 
