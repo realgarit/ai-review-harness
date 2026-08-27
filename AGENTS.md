@@ -7,10 +7,11 @@ Enforced AI + static-analysis code review, in three layers: a CI review
 or Gitea Actions), a local Claude Code `PreToolUse` hook that blocks
 edits to security-sensitive files until a security-reviewer subagent has
 run that session, and an advisory `lefthook` pre-commit hook that runs an
-AI review of the staged diff. `scripts/run-ai-review.sh` is the one place
-that invokes a model CLI (`claude -p` for Claude, or API calls for others);
-everything else (diff
-computation, Semgrep, comment formatting, posting) is model-agnostic.
+AI review of the staged diff. The default review provider is the OpenAI
+Codex CLI (`codex exec`), using a local ChatGPT login or a CI API key;
+Claude (`claude -p`) and other API providers remain selectable. Everything
+else (diff computation, Semgrep, comment formatting, posting) is
+model-agnostic.
 
 - Language/stack: shell scripts (`scripts/`, `hooks/`) and Python
   (`scripts/format-review-comment.py`, `scripts/merge-settings.py`), no
@@ -35,3 +36,14 @@ computation, Semgrep, comment formatting, posting) is model-agnostic.
 ## Working notes
 
 <!-- Any agent: append short dated notes here (YYYY-MM-DD — note). Prune notes when stale or once folded into the sections above. -->
+
+- 2026-08-27 — The default AI review provider is Codex/ChatGPT. Local CLI
+  use authenticates with `codex login`; GitHub CI uses the pinned Codex Action
+  with an OpenAI API-key proxy, while trusted Gitea CI may use the direct
+  dispatcher. Local fallback invocation is
+  `codex exec --ephemeral --sandbox read-only -` for review-only stdin.
+- 2026-08-27 — GitHub CI now routes the default provider through the pinned
+  `openai/codex-action` with `:read-only` permissions and an API-key proxy;
+  only alternate providers use the checked-out dispatcher with step-scoped
+  credentials. Gitea remains direct CLI and trusted-runner-only until an
+  equivalent proxy is configured.

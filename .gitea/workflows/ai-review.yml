@@ -7,7 +7,13 @@
 # match your actual runner label, and sanity-check the API call against
 # your Gitea version's docs before trusting the fail-check.
 #
-# Choose your AI model by setting AI_MODEL (default: claude). Each provider
+# SECURITY: Unlike the GitHub workflow, this unverified Gitea template has no
+# bundled Codex proxy action. The direct Codex path below must therefore only be
+# used on a trusted, single-tenant runner for trusted pull requests. Do not add
+# CODEX_API_KEY to a public/untrusted Gitea pull-request workflow until an
+# equivalent isolated proxy is configured for that installation.
+#
+# Choose your AI model by setting AI_MODEL (default: codex/ChatGPT). Each provider
 # needs its own secrets — see scripts/invoke-model.sh for the full list.
 name: ai-review
 
@@ -17,11 +23,14 @@ on:
 jobs:
   review:
     runs-on: ubuntu-latest # change to your Gitea runner's label
+    env:
+      AI_MODEL: ${{ vars.AI_MODEL || 'codex' }}
     steps:
       - name: Checkout
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Compute PR diff
         env:
@@ -33,17 +42,23 @@ jobs:
 
       - name: Install model CLI (if needed)
         env:
-          AI_MODEL: claude
+          # Keep CLI installation aligned with a repo-level provider override.
+          AI_MODEL: ${{ vars.AI_MODEL || 'codex' }}
         run: |
+          if [ -f .ai-review.conf ]; then
+            . .ai-review.conf
+          fi
+          AI_MODEL="${AI_MODEL:-codex}"
           case "${AI_MODEL}" in
             claude) npm install -g @anthropic-ai/claude-code ;;
-            codex)  npm install -g @openai/codex ;;
+            codex)  npm install -g "@openai/codex@0.150.0-alpha.8" ;;
             *)      echo "AI_MODEL=${AI_MODEL} uses API (curl+jq), no CLI install needed" ;;
           esac
 
-      - name: Run AI review
+      - name: Run AI review (trusted runner only)
+        # Keep provider credentials scoped to this step; never promote them
+        # to the job environment.
         env:
-          AI_MODEL: claude
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           CODEX_API_KEY: ${{ secrets.CODEX_API_KEY }}
@@ -51,6 +66,10 @@ jobs:
           MOONSHOT_API_KEY: ${{ secrets.MOONSHOT_API_KEY }}
           OPENAI_COMPAT_BASE_URL: ${{ secrets.OPENAI_COMPAT_BASE_URL }}
           OPENAI_COMPAT_API_KEY: ${{ secrets.OPENAI_COMPAT_API_KEY }}
+          OPENAI_COMPAT_MODEL: ${{ vars.OPENAI_COMPAT_MODEL }}
+          OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
+          DEEPSEEK_MODEL: ${{ vars.DEEPSEEK_MODEL }}
+          MOONSHOT_MODEL: ${{ vars.MOONSHOT_MODEL }}
         run: bash scripts/run-ai-review.sh
 
       - name: Format combined comment

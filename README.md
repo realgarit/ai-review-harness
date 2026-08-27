@@ -21,9 +21,9 @@ multiple AI providers based on the `AI_MODEL` environment variable:
 
 | Provider | Auth method | Transport |
 |---|---|---|
-| `claude` (default) | Claude Code CLI (subscription) | `claude -p` |
+| `codex` (default) | ChatGPT subscription locally; `OPENAI_API_KEY` for GitHub CI | `codex exec` / pinned Codex Action |
+| `claude` | Claude Code CLI (subscription) | `claude -p` |
 | `openai` | OpenAI API key | `curl` + `jq` (Chat API) |
-| `codex` | OpenAI Codex CLI (subscription) | `codex exec` |
 | `deepseek` | DeepSeek API key | `curl` + `jq` |
 | `moonshot` | Moonshot API key | `curl` + `jq` |
 | `openai-compat` | API key + base URL | `curl` + `jq` (Ollama, vLLM, Azure, etc.) |
@@ -31,6 +31,14 @@ multiple AI providers based on the `AI_MODEL` environment variable:
 Set `AI_MODEL` in CI workflow variables or `.ai-review.conf` to choose.
 See [docs/setup-new-repo.md](docs/setup-new-repo.md) for per-provider
 secret requirements.
+
+For local use of the default ChatGPT-backed provider, run `codex login` and
+choose **Sign in with ChatGPT**. The GitHub workflow uses the pinned
+`openai/codex-action` with a read-only permission profile and requires an
+`OPENAI_API_KEY` repository secret; a local ChatGPT login is not automatically
+available on an ephemeral runner. That secret is OpenAI Platform API usage, not
+subscription usage. The Gitea workflow remains a direct-CLI compatibility path
+for trusted runners only because its runtime has no bundled equivalent proxy.
 
 ## Quickstart
 
@@ -45,6 +53,7 @@ Verify it worked:
 ```sh
 scripts/test-security-review-gate.sh
 scripts/test-mark-security-reviewed.sh
+scripts/test-codex-default.sh
 ```
 
 **Layers 1 and 3 (once per repo):** see

@@ -3,8 +3,9 @@
 # ../../docs/setup-new-repo.md for the full checklist, including the
 # secrets each provider needs.
 #
-# Choose your AI model by setting AI_MODEL (default: claude). Each provider
-# needs its own secrets — see scripts/invoke-model.sh for the full list.
+# Choose your AI model by setting AI_MODEL (default: codex/ChatGPT). The default
+# path uses OpenAI's pinned Codex Action; alternate providers use the local
+# dispatcher and need their own secrets — see scripts/invoke-model.sh.
 name: ai-review
 
 on:
@@ -15,15 +16,51 @@ jobs:
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     env:
-      AI_MODEL: ${{ vars.AI_MODEL || 'claude' }}
+      AI_MODEL: ${{ vars.AI_MODEL || 'codex' }}
+    outputs:
+      provider: ${{ steps.resolve_model.outputs.model }}
+      ai_review: ${{ steps.codex_review.outputs.final-message || steps.capture_alternate.outputs.ai_review }}
+      codex_result: ${{ steps.codex_review.outcome }}
     permissions:
       contents: read
-      pull-requests: write
     steps:
       - name: Checkout
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
         with:
+          ref: refs/pull/${{ github.event.pull_request.number }}/merge
           fetch-depth: 0
+          persist-credentials: false
+
+      - name: Resolve AI provider
+        id: resolve_model
+        env:
+          CONFIGURED_AI_MODEL: ${{ env.AI_MODEL }}
+        run: |
+          python3 - <<'PY'
+          import os
+          import re
+
+          model = os.environ["CONFIGURED_AI_MODEL"]
+          try:
+              with open(".ai-review.conf", encoding="utf-8") as config:
+                  config_lines = list(config)
+          except FileNotFoundError:
+              config_lines = ()
+          for line in config_lines:
+              match = re.match(r"^\s*AI_MODEL\s*=\s*(.*?)\s*(?:#.*)?$", line)
+              if match:
+                  value = match.group(1).strip()
+                  if len(value) >= 2 and value[0] == value[-1] and value[0] in "'\"":
+                      value = value[1:-1]
+                  if value:
+                      model = value
+
+          supported = {"claude", "openai", "codex", "deepseek", "moonshot", "openai-compat"}
+          if model not in supported:
+              raise SystemExit(f"Unsupported AI_MODEL={model}; supported: {', '.join(sorted(supported))}")
+          print(f"Resolved AI_MODEL={model}")
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"model={model}\n")
 
       - name: Compute PR diff
         env:
@@ -33,19 +70,41 @@ jobs:
       - name: Run Semgrep
         run: bash scripts/run-semgrep.sh
 
-      - name: Install model CLI (if needed)
+      - name: Store Semgrep results for the publish job
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: semgrep-results
+          path: semgrep.json
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Render Codex review prompt
+        if: steps.resolve_model.outputs.model == 'codex'
+        env:
+          # Prompt generation has no provider credentials. Codex itself runs
+          # through the isolated action below.
+          RENDER_ONLY: "1"
+        run: bash scripts/run-ai-review.sh
+
+      - name: Install alternate model CLI (if needed)
+        if: steps.resolve_model.outputs.model != 'codex'
+        env:
+          AI_MODEL: ${{ steps.resolve_model.outputs.model }}
         run: |
           case "${AI_MODEL}" in
             claude) npm install -g @anthropic-ai/claude-code ;;
-            codex)  npm install -g @openai/codex ;;
             *)      echo "AI_MODEL=${AI_MODEL} uses API (curl+jq), no CLI install needed" ;;
           esac
 
-      - name: Run AI review
+      - name: Run alternate-provider AI review
+        if: steps.resolve_model.outputs.model != 'codex'
+        # Keep provider credentials scoped to this step; never move them to
+        # jobs.review.env where every checked-out step could inherit them. This
+        # compatibility path is for trusted PRs/runners because its selected
+        # provider credential is consumed by the checked-out dispatcher.
         env:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          CODEX_API_KEY: ${{ secrets.CODEX_API_KEY }}
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
           MOONSHOT_API_KEY: ${{ secrets.MOONSHOT_API_KEY }}
           OPENAI_COMPAT_BASE_URL: ${{ secrets.OPENAI_COMPAT_BASE_URL }}
@@ -55,6 +114,80 @@ jobs:
           DEEPSEEK_MODEL: ${{ vars.DEEPSEEK_MODEL }}
           MOONSHOT_MODEL: ${{ vars.MOONSHOT_MODEL }}
         run: bash scripts/run-ai-review.sh
+
+      - name: Capture alternate-provider review
+        if: steps.resolve_model.outputs.model != 'codex'
+        id: capture_alternate
+        run: |
+          delimiter="AI_REVIEW_$(openssl rand -hex 16)"
+          {
+            printf 'ai_review<<%s\n' "$delimiter"
+            cat ai-review.txt
+            printf '%s\n' "$delimiter"
+          } >> "$GITHUB_OUTPUT"
+
+      # This is deliberately the final executed step in the review job when
+      # the default provider is selected. The API key stays inside the pinned
+      # action/proxy and never enters a checkout shell environment.
+      - name: Run Codex review through the OpenAI Action
+        if: steps.resolve_model.outputs.model == 'codex'
+        id: codex_review
+        continue-on-error: true
+        uses: openai/codex-action@f367b1e9572fd064ea71ef925ca24ee0f01080af # v1
+        with:
+          # OPENAI_API_KEY is the action's documented name. CODEX_API_KEY is
+          # accepted as a compatibility name for existing direct-CLI setups.
+          openai-api-key: ${{ secrets.OPENAI_API_KEY || secrets.CODEX_API_KEY }}
+          codex-version: "0.150.0-alpha.8"
+          prompt-file: prompt.txt
+          output-file: ai-review.txt
+          permission-profile: ":read-only"
+          codex-args: '["--ephemeral"]'
+
+  publish:
+    if: always() && needs.review.result == 'success'
+    needs: review
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          ref: refs/pull/${{ github.event.pull_request.number }}/merge
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Download Semgrep results
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: semgrep-results
+
+      - name: Materialize AI review
+        env:
+          AI_REVIEW: ${{ needs.review.outputs.ai_review }}
+          AI_PROVIDER: ${{ needs.review.outputs.provider }}
+          CODEX_RESULT: ${{ needs.review.outputs.codex_result }}
+        run: |
+          python3 - <<'PY'
+          import os
+
+          review = os.environ.get("AI_REVIEW", "").strip()
+          if not review:
+              provider = os.environ.get("AI_PROVIDER", "codex")
+              result = os.environ.get("CODEX_RESULT", "unknown")
+              if provider == "codex":
+                  review = (
+                      "AI review unavailable: the Codex Action did not return a result "
+                      f"(step outcome: {result}). Configure an OPENAI_API_KEY repository "
+                      "secret for GitHub Actions."
+                  )
+              else:
+                  review = f"AI review unavailable for provider {provider} (step outcome: {result})."
+          with open("ai-review.txt", "w", encoding="utf-8") as output:
+              output.write(review + "\n")
+          PY
 
       - name: Format combined comment
         run: python3 scripts/format-review-comment.py semgrep.json ai-review.txt > comment.md
