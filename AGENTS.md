@@ -2,15 +2,14 @@
 
 > Canonical instructions for all coding agents (Claude Code, Codex, GitHub Copilot). Claude loads this via the CLAUDE.md stub.
 
-Enforced AI + static-analysis code review, in three layers: a CI review
-(Semgrep scan plus an AI review posted as a PR comment, on GitHub Actions
-or Gitea Actions), a local Claude Code `PreToolUse` hook that blocks
-edits to security-sensitive files until a security-reviewer subagent has
-run that session, and an advisory `lefthook` pre-commit hook that runs an
-AI review of the staged diff. `scripts/run-ai-review.sh` is the one place
-that invokes a model CLI (`claude -p` for Claude, or API calls for others);
-everything else (diff
-computation, Semgrep, comment formatting, posting) is model-agnostic.
+Enforced AI + static-analysis code review, in three layers: native Codex Code
+Review for GitHub pull requests, a deterministic Semgrep scan in CI, and an
+advisory `lefthook` pre-commit review of the staged diff. A local Claude Code
+`PreToolUse` hook also remains available for installations that use that
+agent, but it is separate from the Codex review path. The default local review
+provider is the OpenAI Codex CLI (`codex exec`) using a ChatGPT login.
+Everything else (diff computation, Semgrep, comment formatting, posting) is
+provider-agnostic.
 
 - Language/stack: shell scripts (`scripts/`, `hooks/`) and Python
   (`scripts/format-review-comment.py`, `scripts/merge-settings.py`), no
@@ -35,3 +34,13 @@ computation, Semgrep, comment formatting, posting) is model-agnostic.
 ## Working notes
 
 <!-- Any agent: append short dated notes here (YYYY-MM-DD — note). Prune notes when stale or once folded into the sections above. -->
+
+- 2026-08-27 — The default local review provider is Codex/ChatGPT. Local CLI
+  use authenticates with `codex login`; GitHub pull-request review is handled
+  by the native Codex connector, not an Actions API-key workflow. Local
+  fallback invocation is `codex exec --ephemeral --sandbox read-only -` for
+  review-only stdin.
+- 2026-09-15 — The GitHub and Gitea templates are Semgrep-only. Native Codex
+  handles GitHub PR review through the connected repository settings, so these
+  workflows do not request model credentials or pretend a subscription login
+  is available on an ephemeral runner.

@@ -1,13 +1,12 @@
 #!/usr/bin/env bash
 # scripts/invoke-model.sh
 # Single dispatch point for all AI model invocations. Reads AI_MODEL from
-# the environment (defaults to "claude" for backward compatibility) and
+# the environment (defaults to "codex" for ChatGPT-backed review) and
 # delegates to the right provider CLI or API.
 #
 # Supported AI_MODEL values:
-#   claude          Claude Code CLI (npm @anthropic-ai/claude-code)
 #   openai          OpenAI API (ChatGPT models via curl + API key)
-#   codex           OpenAI Codex CLI (npm @openai/codex, subscription auth)
+#   codex           OpenAI Codex CLI (ChatGPT subscription locally)
 #   deepseek        DeepSeek API (OpenAI-compatible endpoint)
 #   moonshot        Moonshot/Kimi API (OpenAI-compatible endpoint)
 #   openai-compat   Generic OpenAI-compatible endpoint (bring your own base URL)
@@ -16,18 +15,7 @@
 # Exit code reflects the underlying command's exit code.
 set -euo pipefail
 
-AI_MODEL="${AI_MODEL:-claude}"
-
-# --- Provider: claude (Claude Code CLI, subscription auth) ---
-invoke_claude() {
-  # Requires CLAUDE_CODE_OAUTH_TOKEN in the environment and `claude`
-  # installed globally via npm.
-  if [ -z "${CLAUDE_CODE_OAUTH_TOKEN:-}" ]; then
-    echo "CLAUDE_CODE_OAUTH_TOKEN is not set. Set it as a repo secret (Settings > Secrets and variables > Actions) so the AI review can use Claude Code." >&2
-    return 1
-  fi
-  claude -p --output-format text
-}
+AI_MODEL="${AI_MODEL:-codex}"
 
 # --- Provider: openai (OpenAI API, API-key auth) ---
 invoke_openai() {
@@ -62,12 +50,12 @@ invoke_openai() {
   echo "$response" | jq -r '.choices[0].message.content // empty'
 }
 
-# --- Provider: codex (OpenAI Codex CLI, subscription auth) ---
+# --- Provider: codex (OpenAI Codex CLI, ChatGPT/API authentication) ---
 invoke_codex() {
-  # Codex CLI uses `codex exec` or `codex chat` for one-shot prompts.
-  # Requires the Codex CLI installed (npm install -g @openai/codex) and
-  # authenticated (codex login or CODEX_API_KEY).
-  codex exec --raw
+  # Local runs reuse the ChatGPT session from `codex login`; CI can provide
+  # CODEX_API_KEY for explicit API-key authentication. Reviews never need to
+  # edit the checkout or persist a session rollout file.
+  codex exec --ephemeral --sandbox read-only -
 }
 
 # --- Provider: deepseek (DeepSeek API, OpenAI-compatible) ---
@@ -150,9 +138,6 @@ invoke_openai_compat() {
 
 # --- Dispatch ---
 case "$AI_MODEL" in
-  claude)
-    invoke_claude
-    ;;
   openai)
     invoke_openai
     ;;
@@ -169,7 +154,7 @@ case "$AI_MODEL" in
     invoke_openai_compat
     ;;
   *)
-    echo "Unknown AI_MODEL: $AI_MODEL. Supported: claude, openai, codex, deepseek, moonshot, openai-compat" >&2
+    echo "Unknown AI_MODEL: $AI_MODEL. Supported: openai, codex, deepseek, moonshot, openai-compat" >&2
     exit 1
     ;;
 esac

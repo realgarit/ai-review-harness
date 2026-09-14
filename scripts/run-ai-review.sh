@@ -3,7 +3,7 @@
 # Renders prompts/review-prompt.md against pr.diff and runs it through the
 # AI model, writing ai-review.txt. Requires pr.diff (see compute-diff.sh).
 #
-# Set AI_MODEL to choose the provider (default: claude). Each provider
+# Set AI_MODEL to choose the provider (default: codex/ChatGPT). Each provider
 # needs its own auth env var — see scripts/invoke-model.sh for the full
 # list. This script is model-agnostic; invoke-model.sh handles dispatch.
 set -euo pipefail
@@ -12,6 +12,12 @@ set -euo pipefail
 # model-specific settings without touching the scripts).
 CONFIG_FILE="$(dirname "$0")/../.ai-review.conf"
 [ -f "$CONFIG_FILE" ] && . "$CONFIG_FILE"
+AI_MODEL="${AI_MODEL:-codex}"
+# A value assigned by a sourced config file is not exported automatically.
+# Export the dispatcher inputs explicitly so repo-level provider/model choices
+# reach invoke-model.sh even when they were not already in the environment.
+export AI_MODEL OPENAI_MODEL DEEPSEEK_MODEL MOONSHOT_MODEL \
+  OPENAI_COMPAT_BASE_URL OPENAI_COMPAT_MODEL
 
 PROMPT_TEMPLATE="$(dirname "$0")/../prompts/review-prompt.md"
 python3 - "$PROMPT_TEMPLATE" << 'PYEOF'
@@ -20,6 +26,11 @@ diff = open("pr.diff").read()
 template = open(sys.argv[1]).read()
 open("prompt.txt", "w").write(template.replace("{{DIFF}}", diff))
 PYEOF
+
+if [ "${RENDER_ONLY:-}" = "1" ]; then
+  echo "Rendered prompt.txt; model invocation skipped."
+  exit 0
+fi
 
 MODEL_DISPATCHER="$(dirname "$0")/invoke-model.sh"
 
@@ -42,6 +53,6 @@ if [ ! -s ai-review.txt ]; then
       printf "\n```\n"
     fi
     printf "\nCheck the [repo secrets](https://github.com/%s/settings/secrets/actions) are configured for your chosen model (AI_MODEL=%s).\n" \
-      "${GITHUB_REPOSITORY:-OWNER/REPO}" "${AI_MODEL:-claude}"
+      "${GITHUB_REPOSITORY:-OWNER/REPO}" "${AI_MODEL:-codex}"
   } > ai-review.txt
 fi
