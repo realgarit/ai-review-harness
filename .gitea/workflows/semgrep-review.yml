@@ -1,0 +1,53 @@
+# Semgrep-only Gitea template. Native Codex Code Review is a GitHub/Codex
+# Cloud integration and is not invoked by this workflow.
+name: semgrep-review
+
+on:
+  pull_request:
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Compute PR diff
+        env:
+          BASE_REF: ${{ gitea.base_ref }}
+        run: bash scripts/compute-diff.sh
+
+      - name: Run Semgrep
+        run: bash scripts/run-semgrep.sh
+
+      - name: Format Semgrep comment
+        run: python3 scripts/format-review-comment.py semgrep.json > comment.md
+
+      - name: Post PR comment
+        env:
+          GITEA_TOKEN: ${{ secrets.GITEA_TOKEN }}
+          GITEA_SERVER: ${{ gitea.server_url }}
+          REPO: ${{ gitea.repository }}
+          PR_NUMBER: ${{ gitea.event.pull_request.number }}
+        run: |
+          body=$(python3 -c "import json,sys; print(json.dumps({'body': open('comment.md').read()}))")
+          curl -sf -X POST \
+            -H "Authorization: token $GITEA_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "$body" \
+            "$GITEA_SERVER/api/v1/repos/$REPO/issues/$PR_NUMBER/comments"
+
+      - name: Fail check if findings exist
+        run: |
+          if ! count=$(python3 -c 'import json; print(len(json.load(open("semgrep.json")).get("results", [])))' 2>/dev/null); then
+            echo "Could not parse semgrep.json - failing check so it gets looked at."
+            exit 1
+          fi
+          echo "Semgrep findings: $count"
+          if [ "$count" -gt 0 ]; then
+            echo "Findings reported - see PR comment."
+            exit 1
+          fi

@@ -61,7 +61,7 @@ MODEL_PROVIDER="$AI_MODEL"
 # rely on curl+jq being available and API keys being set — the dispatcher
 # will fail with a clear error if auth is missing.
 case "$MODEL_PROVIDER" in
-  claude|codex)
+  codex)
     if ! command -v "${MODEL_PROVIDER}" > /dev/null 2>&1; then
       echo "${MODEL_PROVIDER} CLI not found, skipping pre-commit review."
       exit 0

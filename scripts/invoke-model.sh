@@ -5,9 +5,8 @@
 # delegates to the right provider CLI or API.
 #
 # Supported AI_MODEL values:
-#   claude          Claude Code CLI (npm @anthropic-ai/claude-code)
 #   openai          OpenAI API (ChatGPT models via curl + API key)
-#   codex           OpenAI Codex CLI (ChatGPT subscription locally, API key in CI)
+#   codex           OpenAI Codex CLI (ChatGPT subscription locally)
 #   deepseek        DeepSeek API (OpenAI-compatible endpoint)
 #   moonshot        Moonshot/Kimi API (OpenAI-compatible endpoint)
 #   openai-compat   Generic OpenAI-compatible endpoint (bring your own base URL)
@@ -17,17 +16,6 @@
 set -euo pipefail
 
 AI_MODEL="${AI_MODEL:-codex}"
-
-# --- Provider: claude (Claude Code CLI, subscription auth) ---
-invoke_claude() {
-  # Requires CLAUDE_CODE_OAUTH_TOKEN in the environment and `claude`
-  # installed globally via npm.
-  if [ -z "${CLAUDE_CODE_OAUTH_TOKEN:-}" ]; then
-    echo "CLAUDE_CODE_OAUTH_TOKEN is not set. Set it as a repo secret (Settings > Secrets and variables > Actions) so the AI review can use Claude Code." >&2
-    return 1
-  fi
-  claude -p --output-format text
-}
 
 # --- Provider: openai (OpenAI API, API-key auth) ---
 invoke_openai() {
@@ -150,9 +138,6 @@ invoke_openai_compat() {
 
 # --- Dispatch ---
 case "$AI_MODEL" in
-  claude)
-    invoke_claude
-    ;;
   openai)
     invoke_openai
     ;;
@@ -169,7 +154,7 @@ case "$AI_MODEL" in
     invoke_openai_compat
     ;;
   *)
-    echo "Unknown AI_MODEL: $AI_MODEL. Supported: claude, openai, codex, deepseek, moonshot, openai-compat" >&2
+    echo "Unknown AI_MODEL: $AI_MODEL. Supported: openai, codex, deepseek, moonshot, openai-compat" >&2
     exit 1
     ;;
 esac

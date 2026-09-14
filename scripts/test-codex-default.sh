@@ -59,7 +59,7 @@ run_codex() {
   printf '%s' "$prompt" | bash "$ROOT/scripts/invoke-model.sh"
 }
 
-unset AI_MODEL CLAUDE_CODE_OAUTH_TOKEN CODEX_API_KEY
+unset AI_MODEL CODEX_API_KEY
 set +e
 default_output="$(run_codex 'default prompt')"
 default_status=$?
@@ -94,7 +94,7 @@ CONFIG_HARNESS="$TMP/config-harness"
 mkdir -p "$CONFIG_HARNESS/scripts" "$CONFIG_HARNESS/prompts"
 cp "$ROOT/scripts/run-ai-review.sh" "$CONFIG_HARNESS/scripts/run-ai-review.sh"
 cp "$ROOT/prompts/review-prompt.md" "$CONFIG_HARNESS/prompts/review-prompt.md"
-printf '%s\n' 'AI_MODEL=claude' 'OPENAI_MODEL=configured-model' > "$CONFIG_HARNESS/.ai-review.conf"
+printf '%s\n' 'AI_MODEL=deepseek' 'OPENAI_MODEL=configured-model' > "$CONFIG_HARNESS/.ai-review.conf"
 printf '%s\n' \
   '#!/usr/bin/env bash' \
   'set -euo pipefail' \
@@ -111,7 +111,7 @@ set -e
 popd > /dev/null
 check_equal "config-selected provider review succeeds" "0" "$config_status"
 check_equal "config-selected provider reaches dispatcher" \
-  "claude|configured-model" "$(cat "$CONFIG_TEST_ENV_FILE")"
+  "deepseek|configured-model" "$(cat "$CONFIG_TEST_ENV_FILE")"
 check_contains "config-selected provider receives the rendered diff" \
   'config diff' "$CONFIG_HARNESS/ai-review.txt"
 
@@ -121,33 +121,24 @@ check_contains "run-ai-review initializes the Codex default" \
   'AI_MODEL="${AI_MODEL:-codex}"' "$ROOT/scripts/run-ai-review.sh"
 check_contains "pre-commit initializes the Codex default" \
   'MODEL_PROVIDER="$AI_MODEL"' "$ROOT/scripts/pre-commit-review.sh"
-check_contains "GitHub workflow defaults to Codex" \
-  "vars.AI_MODEL || 'codex'" "$ROOT/.github/workflows/ai-review.yml"
-check_contains "GitHub resolves repo provider configuration" \
-  'id: resolve_model' "$ROOT/.github/workflows/ai-review.yml"
-check_contains "GitHub Codex path follows the resolved provider" \
-  "steps.resolve_model.outputs.model == 'codex'" "$ROOT/.github/workflows/ai-review.yml"
-check_contains "Gitea workflow defaults to Codex" \
-  "vars.AI_MODEL || 'codex'" "$ROOT/.gitea/workflows/ai-review.yml"
+check_contains "GitHub workflow is Semgrep-only" \
+  'name: semgrep-review' "$ROOT/.github/workflows/semgrep-review.yml"
+check_contains "GitHub workflow runs Semgrep" \
+  'scripts/run-semgrep.sh' "$ROOT/.github/workflows/semgrep-review.yml"
+check_contains "Gitea workflow is Semgrep-only" \
+  'name: semgrep-review' "$ROOT/.gitea/workflows/semgrep-review.yml"
 check_contains "repo config documents Codex as the default" \
   '# AI_MODEL=codex' "$ROOT/.ai-review.conf"
 check_contains "run-ai-review exports provider configuration" \
   'export AI_MODEL OPENAI_MODEL' "$ROOT/scripts/run-ai-review.sh"
 check_contains "pre-commit exports provider configuration" \
   'export AI_MODEL OPENAI_MODEL' "$ROOT/scripts/pre-commit-review.sh"
-check_contains "GitHub uses the pinned Codex Action" \
-  'openai/codex-action@f367b1e9572fd064ea71ef925ca24ee0f01080af' \
-  "$ROOT/.github/workflows/ai-review.yml"
-check_contains "GitHub uses Codex read-only permissions" \
-  'permission-profile: ":read-only"' "$ROOT/.github/workflows/ai-review.yml"
-check_contains "GitHub disables checkout credential persistence" \
-  'persist-credentials: false' "$ROOT/.github/workflows/ai-review.yml"
-check_contains "GitHub pins the Codex CLI version" \
-  'codex-version: "0.150.0-alpha.8"' "$ROOT/.github/workflows/ai-review.yml"
-check_contains "GitHub uses ephemeral Codex sessions" \
-  '"--ephemeral"' "$ROOT/.github/workflows/ai-review.yml"
-check_not_contains "GitHub does not expose CODEX_API_KEY to checkout scripts" \
-  'CODEX_API_KEY: ${{' "$ROOT/.github/workflows/ai-review.yml"
+check_not_contains "GitHub workflow has no OpenAI API key" \
+  'OPENAI_API_KEY' "$ROOT/.github/workflows/semgrep-review.yml"
+check_not_contains "GitHub workflow has no Claude token" \
+  'CLAUDE_CODE_OAUTH_TOKEN' "$ROOT/.github/workflows/semgrep-review.yml"
+check_not_contains "GitHub workflow has no Codex Action" \
+  'openai/codex-action' "$ROOT/.github/workflows/semgrep-review.yml"
 
 echo "$pass passed, $fail failed"
 [ "$fail" -eq 0 ]
