@@ -18,8 +18,8 @@ provider-agnostic.
   per-repo CI/pre-commit setup documented in `docs/setup-new-repo.md`.
 - Tests: `scripts/test-security-review-gate.sh` and
   `scripts/test-mark-security-reviewed.sh`.
-- CI workflows: `.github/workflows/ai-review.yml` (production) and
-  `.gitea/workflows/ai-review.yml` (unverified against a real Gitea
+- CI workflows: `.github/workflows/semgrep-review.yml` (production) and
+  `.gitea/workflows/semgrep-review.yml` (unverified against a real Gitea
   instance).
 - Status: personal-use tooling, MIT-licensed, maintained on a
   when-I-have-time basis.

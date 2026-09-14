@@ -30,12 +30,15 @@ This checklist is everything else, done once per repo.
    Docker on the runner - `ubuntu-latest` GitHub-hosted runners have it
    by default. On Gitea, confirm your runner has Docker before relying
    on this step.
-4. Open a test PR and confirm both the Semgrep comment and the native Codex
-   review appear.
+4. For GitHub, open a test PR and confirm both the Semgrep comment and the
+   native Codex review appear. Gitea users should confirm the Semgrep comment;
+   native Codex review is not available through the Gitea template.
 
 ## Layer 3: pre-commit advisory hook
 
-1. Copy `scripts/pre-commit-review.sh` and `lefthook.yml` into the repo.
+1. Copy `scripts/pre-commit-review.sh`, `scripts/invoke-model.sh`, and
+   `lefthook.yml` into the repo. The pre-commit hook uses the dispatcher to
+   run the local Codex CLI.
 2. Install [lefthook](https://github.com/evilmartians/lefthook) (`brew
    install lefthook`, `npm install -D lefthook`, or the install script -
    whichever fits the project) and run `lefthook install`.
