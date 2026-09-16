@@ -5,7 +5,10 @@
 # compute-diff.sh) and a working docker daemon.
 set -euo pipefail
 
-EXISTING_FILES=$(while IFS= read -r f; do [ -f "$f" ] && printf '%s\n' "$f"; done < changed-files.txt)
+# Filter deleted paths before invoking Semgrep. Keep the loop successful when
+# the last changed path is deleted, because set -e otherwise aborts the
+# assignment before Semgrep can produce an empty report.
+EXISTING_FILES=$(while IFS= read -r f; do { [ -f "$f" ] && printf '%s\n' "$f"; } || true; done < changed-files.txt)
 
 if [ -z "$EXISTING_FILES" ]; then
   echo '{"results": []}' > semgrep.json

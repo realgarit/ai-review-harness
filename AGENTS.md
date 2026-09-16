@@ -1,14 +1,16 @@
 # ai-review-harness — Agent instructions
 
-> Canonical instructions for all coding agents (Claude Code, Codex, GitHub Copilot). Claude loads this via the CLAUDE.md stub.
+> Canonical instructions for all coding agents (Claude Code, Codex, GitHub Copilot). Codex reads this directly; Claude and GitHub Copilot use pointer files when present.
 
-Enforced AI + static-analysis code review, in three layers: a CI review
-(Semgrep scan plus an AI review posted as a PR comment, on GitHub Actions
-or Gitea Actions), a local Claude Code `PreToolUse` hook that blocks
-edits to security-sensitive files until a security-reviewer subagent has
-run that session, and an advisory `lefthook` pre-commit hook that runs an
-AI review of the staged diff. The default review provider is the OpenAI
-Codex CLI (`codex exec`), using a local ChatGPT login or a CI API key;
+Enforced AI + static-analysis code review, in three layers: (1) a GitHub CI
+Semgrep scan posted as a PR comment plus native Codex Code Review configured
+in Codex Cloud, or a trusted-runner Gitea CI review using the configurable
+dispatcher; (2) a local Claude Code `PreToolUse` hook that blocks edits to
+security-sensitive files until a security-reviewer subagent has run that
+session; and (3) an advisory `lefthook` pre-commit hook that runs an AI
+review of the staged diff. The default review provider is the OpenAI
+Codex CLI (`codex exec`), using a local ChatGPT login or provider-specific
+credentials on trusted CI runners;
 Claude (`claude -p`) and other API providers remain selectable. Everything
 else (diff computation, Semgrep, comment formatting, posting) is
 model-agnostic.
@@ -20,16 +22,17 @@ model-agnostic.
   per-repo CI/pre-commit setup documented in `docs/setup-new-repo.md`.
 - Tests: `scripts/test-security-review-gate.sh` and
   `scripts/test-mark-security-reviewed.sh`.
-- CI workflows: `.github/workflows/ai-review.yml` (production) and
-  `.gitea/workflows/ai-review.yml` (unverified against a real Gitea
-  instance).
+- CI workflows: `.github/workflows/ai-review.yml` runs the deterministic
+  GitHub Semgrep gate; native Codex Code Review supplies contextual findings.
+  `.gitea/workflows/ai-review.yml` remains the unverified trusted-runner
+  dispatcher path.
 - Status: personal-use tooling, MIT-licensed, maintained on a
   when-I-have-time basis.
 
 ## Cross-agent conventions
 
 - This file (`AGENTS.md`) is the single source of truth for agent instructions in this repo. `CLAUDE.md` and `.github/copilot-instructions.md` are pointers to it — never edit them, never duplicate content into them.
-- Reusable skills live in `.claude/skills/` (one folder per skill with a `SKILL.md`). GitHub Copilot reads that directory natively; Codex sees it via the `.agents/skills` symlink. New skills always go in `.claude/skills/`.
+- Shared repository skills live in `.agents/skills/` (one folder per skill with a `SKILL.md`). Codex scans this location natively. Keep any `.claude/skills/` compatibility bridge pointer-only or generated from this directory; never maintain two independent sources. New shared skills always go in `.agents/skills/`.
 - Claude-specific subagent definitions live in `.claude/agents/`. If you are not Claude Code, you may read them as role/process guidance.
 - Session continuity across tools: before ending substantial work in ANY tool (Claude Code, Codex, Copilot), record durable context — decisions made, gotchas discovered, in-progress state worth resuming — in the "Working notes" section below, or fold it into the relevant section above. This is the shared memory between agents.
 
@@ -47,3 +50,10 @@ model-agnostic.
   only alternate providers use the checked-out dispatcher with step-scoped
   credentials. Gitea remains direct CLI and trusted-runner-only until an
   equivalent proxy is configured.
+
+- 2026-09-16 — GitHub CI now keeps only the deterministic Semgrep gate in the
+  checked-in workflow. Native Codex Code Review supplies the contextual AI
+  review in Codex Cloud, matching the fuenf-labs production pattern; Gitea and
+  local hooks retain the configurable direct dispatcher.
+
+- 2026-09-16 — Codex-first layout sweep: repository-local shared skills use `.agents/skills/` as the canonical source. Any `.claude/skills/` path is only a compatibility bridge or generated mirror.
