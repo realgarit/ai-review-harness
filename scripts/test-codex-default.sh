@@ -125,6 +125,8 @@ check_contains "GitHub workflow is Semgrep-only" \
   'name: semgrep-review' "$ROOT/.github/workflows/semgrep-review.yml"
 check_contains "GitHub workflow runs Semgrep" \
   'scripts/run-semgrep.sh' "$ROOT/.github/workflows/semgrep-review.yml"
+check_contains "Semgrep ignores deleted paths without aborting" \
+  '{ [ -f "$f" ] && printf' "$ROOT/scripts/run-semgrep.sh"
 check_contains "Gitea workflow is Semgrep-only" \
   'name: semgrep-review' "$ROOT/.gitea/workflows/semgrep-review.yml"
 check_contains "repo config documents Codex as the default" \
