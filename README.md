@@ -3,9 +3,10 @@
 Enforced AI + static-analysis code review, in three layers that catch
 things at different points instead of relying on one gate:
 
-1. **CI review** - every pull request gets a Semgrep scan (deterministic,
-   scoped to the diff) plus an AI review (security + code quality),
-   posted as a PR comment. Works on GitHub Actions or Gitea Actions.
+1. **CI review** - every pull request gets a deterministic Semgrep scan,
+   scoped to the diff and posted as a PR comment. GitHub repositories use
+   native Codex Code Review for contextual AI findings; Gitea uses the
+   configurable trusted-runner dispatcher.
 2. **Local edit-blocking hook** - a Claude Code `PreToolUse` hook blocks
    edits to security-sensitive files in a session until a
    `security-reviewer`-style subagent has actually run once that session.
@@ -21,7 +22,7 @@ multiple AI providers based on the `AI_MODEL` environment variable:
 
 | Provider | Auth method | Transport |
 |---|---|---|
-| `codex` (default) | ChatGPT subscription locally; `OPENAI_API_KEY` for GitHub CI | `codex exec` / pinned Codex Action |
+| `codex` (default) | ChatGPT subscription locally; native Codex review on GitHub | `codex exec` / Codex Code Review |
 | `claude` | Claude Code CLI (subscription) | `claude -p` |
 | `openai` | OpenAI API key | `curl` + `jq` (Chat API) |
 | `deepseek` | DeepSeek API key | `curl` + `jq` |
@@ -33,12 +34,11 @@ See [docs/setup-new-repo.md](docs/setup-new-repo.md) for per-provider
 secret requirements.
 
 For local use of the default ChatGPT-backed provider, run `codex login` and
-choose **Sign in with ChatGPT**. The GitHub workflow uses the pinned
-`openai/codex-action` with a read-only permission profile and requires an
-`OPENAI_API_KEY` repository secret; a local ChatGPT login is not automatically
-available on an ephemeral runner. That secret is OpenAI Platform API usage, not
-subscription usage. The Gitea workflow remains a direct-CLI compatibility path
-for trusted runners only because its runtime has no bundled equivalent proxy.
+choose **Sign in with ChatGPT**. On GitHub, enable native Codex Code Review in
+Codex Cloud for the repository; the checked-in workflow intentionally runs only
+the deterministic Semgrep gate and does not require an OpenAI API key. The
+Gitea workflow remains a direct-CLI compatibility path for trusted runners
+only because its runtime has no bundled equivalent proxy.
 
 ## Quickstart
 
