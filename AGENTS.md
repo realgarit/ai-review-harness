@@ -33,6 +33,11 @@ provider-agnostic.
 
 ## Working notes
 
+- 2026-10-08: Dependabot alerts/security updates are enabled. Version updates run
+  weekly on Monday at 06:00 Europe/Zurich for the manifests in .github/dependabot.yml.
+  Minor/patch updates are grouped, majors stay separate, and merging remains review-driven.
+
+
 <!-- Any agent: append short dated notes here (YYYY-MM-DD — note). Prune notes when stale or once folded into the sections above. -->
 
 - 2026-08-27 — The default local review provider is Codex/ChatGPT. Local CLI
